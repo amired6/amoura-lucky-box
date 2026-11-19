@@ -1,0 +1,134 @@
+
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Amoura Lucky Box</title>
+</head>
+<body>
+
+<h2>Amoura Lucky Box</h2>
+
+<h3>ورود فروشنده</h3>
+<input id="email" type="email" placeholder="ایمیل">
+<input id="password" type="password" placeholder="رمز عبور">
+<button id="loginBtn">ورود</button>
+
+<p id="loginStatus"></p>
+
+<hr>
+
+<h3>پنل فروشنده</h3>
+<button id="createBtn" disabled>ساخت جلسه جدید</button>
+<p id="sessionResult"></p>
+
+<hr>
+
+<h3>قرعه‌کشی مشتری</h3>
+<input id="sessionCode" placeholder="کد جلسه">
+<button id="drawBtn">شروع قرعه‌کشی</button>
+<pre id="result"></pre>
+
+<script type="module">
+import { createClient } from
+"https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+// اطلاعات پروژه Supabase را اینجا وارد کن
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+
+// آدرس تابع Edge Function
+const EDGE_FUNCTION_URL =
+SUPABASE_URL + "/functions/v1/lucky-draw";
+
+const supabase = createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
+
+const loginBtn = document.getElementById("loginBtn");
+const createBtn = document.getElementById("createBtn");
+const drawBtn = document.getElementById("drawBtn");
+
+loginBtn.addEventListener("click", async () => {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  if (error) {
+    document.getElementById("loginStatus").textContent =
+      "ورود ناموفق: " + error.message;
+    return;
+  }
+
+  document.getElementById("loginStatus").textContent =
+    "ورود موفق بود.";
+
+  createBtn.disabled = false;
+});
+
+createBtn.addEventListener("click", async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
+    alert("ابتدا وارد حساب فروشنده شوید.");
+    return;
+  }
+
+  const response = await fetch(EDGE_FUNCTION_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": "Bearer " + session.access_token
+    },
+    body: JSON.stringify({
+      action: "create_session"
+    })
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    document.getElementById("sessionResult").textContent =
+      data.error || "خطا در ساخت جلسه";
+    return;
+  }
+
+  document.getElementById("sessionResult").textContent =
+    "کد جلسه: " + data.session_code;
+
+  document.getElementById("sessionCode").value =
+    data.session_code;
+});
+
+drawBtn.addEventListener("click", async () => {
+  const code = document.getElementById("sessionCode").value.trim();
+
+  const response = await fetch(EDGE_FUNCTION_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify({
+      action: "draw",
+      session_code: code
+    })
+  });
+
+  const data = await response.json();
+
+  document.getElementById("result").textContent =
+    JSON.stringify(data, null, 2);
+});
+</script>
+
+</body>
+  </html>
+  
